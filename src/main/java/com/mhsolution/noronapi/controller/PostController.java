@@ -5,6 +5,7 @@ import com.mhsolution.noronapi.data.response.PostResponse;
 import com.mhsolution.noronapi.entity.ListPostResponse;
 import com.mhsolution.noronapi.service.post.PostService;
 
+import io.reactivex.rxjava3.core.Single;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -23,23 +24,31 @@ public class PostController {
     }
 
     @GetMapping("/post/all")
-    public ResponseEntity<ListPostResponse> findAllPost(@RequestParam int limit, @RequestParam int pageNum) {
+    public ResponseEntity<Single<ListPostResponse>> findAllPost(@RequestParam int limit, @RequestParam int pageNum) {
         return ResponseEntity.status(HttpStatus.OK).body(postService.findAll(pageNum, limit));
+//        postService.findAll(pageNum, limit);
+//        return null;
     }
 
     @GetMapping("/post/find-single-post/{id}")
     public ResponseEntity<PostResponse> findById(@PathVariable("id") int postId) {
-        return ResponseEntity.status(HttpStatus.OK).body(postService.findPostById(postId));
+//        return ResponseEntity.status(HttpStatus.OK).body(postService.findPostById(postId));
+        postService.findPostById(postId);
+        return null;
     }
 
     @PostMapping("/post/create")
     public ResponseEntity<PostResponse> createPost(@RequestBody PostRequest postRequest) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(postService.createPost(postRequest));
+//        return ResponseEntity.status(HttpStatus.CREATED).body(postService.createPost(postRequest));
+        postService.createPost(postRequest);
+        return null;
     }
 
     @PutMapping("/post/update/{id}")
     public ResponseEntity<PostResponse> updatePost(@RequestBody PostRequest postRequest, @PathVariable("id") int postId) {
-        return ResponseEntity.status(HttpStatus.OK).body(postService.updatePost(postId, postRequest));
+//        return ResponseEntity.status(HttpStatus.OK).body(postService.updatePost(postId, postRequest));
+        postService.updatePost(postId, postRequest);
+        return null;
     }
 
     @DeleteMapping("/post/delete/{id}")

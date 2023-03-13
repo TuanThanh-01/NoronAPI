@@ -7,6 +7,8 @@ import com.mhsolution.noronapi.entity.ListUserResponse;
 import com.mhsolution.noronapi.repository.users.UserRepository;
 import com.mhsolution.noronapi.service.utils.TimeUtils;
 import com.tej.JooQDemo.jooq.sample.model.tables.pojos.Users;
+import io.reactivex.rxjava3.core.Single;
+import io.reactivex.rxjava3.schedulers.Schedulers;
 import org.jooq.DSLContext;
 import org.springframework.stereotype.Service;
 
@@ -34,51 +36,74 @@ public class UserServiceImpl implements UserService {
         this.userMapper = userMapper;
     }
 
-
     @Override
     public boolean checkUserExist(String email) {
-        return false;
+        return userRepository.usersExistsByEmail(email);
     }
 
     @Override
-    public ListUserResponse findAllUser(int pageNum, int limit) {
-        ListUserResponse listUserResponse = new ListUserResponse();
-        return listUserResponse.setLimit(limit)
-                .setPageNum(pageNum)
-                .setUsers(userMapper.toUserResponses(userRepository.findAll(pageNum, limit)));
+    public Single<ListUserResponse> findAllUser(int pageNum, int limit) {
+        return Single.create(singleSubscriber -> {
+            ListUserResponse listUserResponse = new ListUserResponse();
+            listUserResponse.setLimit(limit)
+                    .setPageNum(pageNum)
+                    .setUsers(userMapper.toUserResponses(userRepository.findAll(pageNum, limit)));
+            singleSubscriber.onSuccess(listUserResponse);
+        });
     }
 
     @Override
-    public UserResponse findUserById(int id) {
-        return userMapper.toResponse(userRepository.findByID(id));
+    public Single<Users> findUserById(int id) {
+         return Single.create(singleSubscriber -> {
+             Users users = userRepository.findByID(id);
+             if (users == null) {
+                 singleSubscriber.onError(new Exception("user not found"));
+             }
+             else {
+                 singleSubscriber.onSuccess(users);
+             }
+        });
     }
 
     @Override
-    public UserResponse createUser(UserRequest userRequest) {
-        Users user = userMapper.toPojo(userRequest);
-        userRepository.add(user);
-        UserResponse userResponse = userMapper.toResponse(user);
-        return userResponse;
+    public Single<Users> createUser(UserRequest userRequest) {
+        return Single.create(singleSubscriber -> {
+            Users user = userMapper.toPojo(userRequest);
+            if(checkUserExist(user.getEmail())) {
+                singleSubscriber.onError(new Exception("User Email Exists!!!"));
+            }
+            else {
+                userRepository.add(user);
+                singleSubscriber.onSuccess(user);
+            }
+        });
     }
 
     @Override
-    public UserResponse updateUserInfo(int userId, UserRequest userRequest) {
-        Users user = userRepository.findByID(userId);
-        if (Objects.nonNull(userRequest.getUsername()) && !"".equalsIgnoreCase(userRequest.getUsername())) {
-            user.setUsername(userRequest.getUsername());
-        }
-        if (Objects.nonNull(userRequest.getPhoneNumber()) && !"".equalsIgnoreCase(userRequest.getPhoneNumber())) {
-            user.setPhoneNumber(userRequest.getPhoneNumber());
-        }
-        if (Objects.nonNull(userRequest.getPass()) && !"".equalsIgnoreCase(userRequest.getPass())) {
-            user.setPass(userRequest.getPass());
-        }
-        if (Objects.nonNull(userRequest.getEmail()) && !"".equalsIgnoreCase(userRequest.getEmail()) && !userRepository.usersExistsByEmail(userRequest.getEmail())) {
-            user.setEmail(userRequest.getEmail());
-        }
-        user.setUpdateAt(currentDateTime.getCurrentDateTime());
-        userRepository.update(user, userId);
-        return userMapper.toResponse(user);
+    public Single<Users> updateUserInfo(int userId, UserRequest userRequest) {
+        return Single.create(singleSubscriber -> {
+            Users user = userRepository.findByID(userId);
+            if(user == null) {
+                singleSubscriber.onError(new Exception("User not found!!!"));
+            }
+            else {
+                if (Objects.nonNull(userRequest.getUsername()) && !"".equalsIgnoreCase(userRequest.getUsername())) {
+                    user.setUsername(userRequest.getUsername());
+                }
+                if (Objects.nonNull(userRequest.getPhoneNumber()) && !"".equalsIgnoreCase(userRequest.getPhoneNumber())) {
+                    user.setPhoneNumber(userRequest.getPhoneNumber());
+                }
+                if (Objects.nonNull(userRequest.getPass()) && !"".equalsIgnoreCase(userRequest.getPass())) {
+                    user.setPass(userRequest.getPass());
+                }
+                if (Objects.nonNull(userRequest.getEmail()) && !"".equalsIgnoreCase(userRequest.getEmail()) && !userRepository.usersExistsByEmail(userRequest.getEmail())) {
+                    user.setEmail(userRequest.getEmail());
+                }
+                user.setUpdateAt(currentDateTime.getCurrentDateTime());
+                userRepository.update(user, userId);
+                singleSubscriber.onSuccess(user);
+            }
+        });
     }
 
     @Override
