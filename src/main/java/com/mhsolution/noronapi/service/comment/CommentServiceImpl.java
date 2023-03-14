@@ -9,6 +9,7 @@ import com.mhsolution.noronapi.repository.users.UserRepository;
 import com.mhsolution.noronapi.service.utils.TimeUtils;
 import com.tej.JooQDemo.jooq.sample.model.tables.pojos.Comments;
 import com.tej.JooQDemo.jooq.sample.model.tables.pojos.Users;
+import io.reactivex.rxjava3.core.Single;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -47,50 +48,114 @@ public class CommentServiceImpl implements CommentService {
                 .collect(Collectors.toList());
     }
 
-    private HashMap<Integer, Users> getUsersHashMap(List<Integer> listUserId) {
+    private Single<HashMap<Integer, Users>> getUsersHashMap(List<Integer> listUserId) {
         HashMap<Integer, Users> dataUser = new HashMap<>();
-        userRepository.findAllByListId(listUserId).stream()
-                .forEach(user -> dataUser.put(user.getId(), user));
-        return dataUser;
+        return Single.create(singleSubscriber -> {
+            List<Users> usersList = userRepository.findAllByListId(listUserId);
+            if (usersList.size() == 0) {
+                singleSubscriber.onError(new Exception("Can't find user"));
+            } else {
+                usersList.stream().forEach(users -> dataUser.put(users.getId(), users));
+                singleSubscriber.onSuccess(dataUser);
+            }
+        });
+    }
+
+    private Single<List<Comments>> getAllCommentSingleCommentByPostId(int postId) {
+        return Single.create(singleSubscriber -> {
+            List<Comments> comments = commentRepository.findAllByPostId(postId);
+            if (comments.isEmpty()) {
+                singleSubscriber.onError(new Exception("Can't find comments"));
+            } else {
+                singleSubscriber.onSuccess(comments);
+            }
+        });
     }
 
     @Override
-    public List<CommentResponse> fetchAllCommentByPostId(int postId) {
-        List<Comments> comments = commentRepository.findAllByPostId(postId);
-        List<Integer> listUserId = getListUserId(comments);
-        HashMap<Integer, Users> dataUser = getUsersHashMap(listUserId);
+    public Single<List<CommentResponse>> fetchAllCommentByPostId(int postId) {
+        return getAllCommentSingleCommentByPostId(postId)
+                .flatMap(comments -> {
+                    List<Integer> listUserID = getListUserId(comments);
+                    return getUsersHashMap(listUserID)
+                            .map(userHashMap -> comments.stream()
+                                    .map(comment -> commentMapper.toResponse(comment, userHashMap.get(comment.getUserId())))
+                                    .collect(Collectors.toList())
+                            );
 
-        return comments.stream()
-                .map(comment -> commentMapper.toResponse(comment, dataUser.get(comment.getUserId())))
-                .collect(Collectors.toList());
+                });
+    }
+
+    private Single<List<Comments>> findAllSingleAnswerComment(int cmtId) {
+        return Single.create(singleSubscriber -> {
+            List<Comments> comments = commentRepository.findAllAnswerComment(cmtId);
+            if(comments.isEmpty()) {
+                singleSubscriber.onError(new Exception("Comments can't find"));
+            }
+            else {
+                singleSubscriber.onSuccess(comments);
+            }
+        });
     }
 
     @Override
-    public List<CommentResponse> fetchAllAnswerComment(int cmtId) {
-        List<Comments> comments = commentRepository.findAllAnswerComment(cmtId);
-        List<Integer> listUserId = getListUserId(comments);
-        HashMap<Integer, Users> dataUser = getUsersHashMap(listUserId);
-        return comments.stream()
-                .map(comment -> commentMapper.toResponse(comment, dataUser.get(comment.getUserId())))
-                .collect(Collectors.toList());
+    public Single<List<CommentResponse>> fetchAllAnswerComment(int cmtId) {
+        return findAllSingleAnswerComment(cmtId)
+                .flatMap(answerComments -> {
+                    List<Integer> listUserId = getListUserId(answerComments);
+                    return getUsersHashMap(listUserId)
+                            .map(userHashMap -> answerComments.stream()
+                                    .map(comment -> commentMapper.toResponse(comment, userHashMap.get(comment.getUserId())))
+                                    .collect(Collectors.toList()));
+                });
+    }
+
+    private Single<Users> getUserById(int userId) {
+        return Single.create(singleSubscriber -> {
+            Users users = userRepository.findByID(userId);
+            if(users == null) {
+                singleSubscriber.onError(new Exception(""));
+            }
+            else {
+                singleSubscriber.onSuccess(users);
+            }
+        });
     }
 
     @Override
-    public CommentResponse createComment(CommentRequest commentRequest) {
-        Comments comment = commentMapper.toPojo(commentRequest);
-        commentRepository.add(comment);
-        return commentMapper.toResponse(comment, userRepository.findByID(comment.getUserId()));
+    public Single<CommentResponse> createComment(CommentRequest commentRequest) {
+        return Single.just(commentMapper.toPojo(commentRequest))
+                .flatMap(comment ->  {
+                    commentRepository.add(comment);
+                    return getUserById(comment.getUserId())
+                            .map(users ->  commentMapper.toResponse(comment, users));
+                });
+    }
+
+    private Single<Comments> getCommentSingleById(int cmtId) {
+        return Single.create(singleSubscriber -> {
+            Comments comments = commentRepository.findById(cmtId);
+            if(comments == null) {
+                singleSubscriber.onError(new Exception("Can't find comment"));
+            }
+            else {
+                singleSubscriber.onSuccess(comments);
+            }
+        });
     }
 
     @Override
-    public CommentResponse updateComment(int cmtId, CommentRequest commentRequest) {
-        Comments commentDB = commentRepository.findById(cmtId);
-        if (Objects.nonNull(commentRequest.getContent()) && !"".equalsIgnoreCase(commentRequest.getContent())) {
-            commentDB.setContent(commentRequest.getContent());
-        }
-        commentDB.setUpdateAt(getCurrentDateTime());
-        commentRepository.update(commentDB, cmtId);
-        return commentMapper.toResponse(commentDB, userRepository.findByID(commentDB.getUserId()));
+    public Single<CommentResponse> updateComment(int cmtId, CommentRequest commentRequest) {
+        return getCommentSingleById(cmtId)
+                .flatMap(comment ->  {
+                    if (Objects.nonNull(commentRequest.getContent()) && !"".equalsIgnoreCase(commentRequest.getContent())) {
+                        comment.setContent(commentRequest.getContent());
+                    }
+                    comment.setUpdateAt(getCurrentDateTime());
+                    commentRepository.update(comment, cmtId);
+                    return getUserById(comment.getUserId())
+                            .map(user -> commentMapper.toResponse(comment, user));
+                });
     }
 
     @Override

@@ -11,7 +11,6 @@ import com.tej.JooQDemo.jooq.sample.model.tables.pojos.Post;
 import com.tej.JooQDemo.jooq.sample.model.tables.pojos.Topic;
 import com.tej.JooQDemo.jooq.sample.model.tables.pojos.Users;
 import io.reactivex.rxjava3.core.Single;
-import io.reactivex.rxjava3.schedulers.Schedulers;
 import org.springframework.stereotype.Service;
 
 import java.util.HashMap;
@@ -46,19 +45,19 @@ public class PostServiceImpl implements PostService {
 
     @Override
     public Single<ListPostResponse> findAll(int pageNum, int limit) {
-        return Single.just(getAllPost(pageNum, limit))
-                .flatMap(listPostSingle -> listPostSingle
-                        .flatMap(listPost -> Single.zip(
-                                getUsersMap(listPost),
-                                getPostTopicMap(listPost),
-                                (usersMap, postMap) -> {
-                                    List<PostResponse> responses = postMapper.toPostResponse(listPost, postMap, usersMap);
-                                    return new ListPostResponse()
-                                            .setPageNum(pageNum)
-                                            .setLimit(limit)
-                                            .setPosts(responses);
-                                }))
-                );
+        return Single.just("io")
+                .flatMap(s -> getAllPost(pageNum, limit))
+                .flatMap(posts -> Single.zip(
+                        getUsersMap(posts),
+                        getPostTopicMap(posts),
+                        (userMap, postMap) -> {
+                            List<PostResponse> responses = postMapper.toPostResponse(posts, postMap, userMap);
+                            return new ListPostResponse()
+                                    .setPageNum(pageNum)
+                                    .setLimit(limit)
+                                    .setPosts(responses);
+                        }
+                ));
     }
 
     private Single<List<Post>> getAllPost(int pageNum, int limit) {
@@ -136,13 +135,12 @@ public class PostServiceImpl implements PostService {
 
     @Override
     public Single<PostResponse> findPostById(int postId) {
-        return Single.just(findPostSingleById(postId))
-                .flatMap(postSingle -> postSingle.flatMap(
-                        post -> Single.zip(
-                                findUserSingleById(post.getUserId()),
-                                findAllTopicSingleByPostId(postId),
-                                (user, topicList) -> postMapper.toPostResponse(post, user, topicList)
-                        )
+        return Single.just("io")
+                .flatMap(s -> findPostSingleById(postId))
+                .flatMap(post -> Single.zip(
+                        findUserSingleById(post.getUserId()),
+                        findAllTopicSingleByPostId(postId),
+                        (user, topicList) -> postMapper.toPostResponse(post, user, topicList)
                 ));
     }
 
@@ -174,25 +172,23 @@ public class PostServiceImpl implements PostService {
 
     @Override
     public Single<PostResponse> updatePost(int postId, PostRequest postRequest) {
-        return Single.just(findPostSingleById(postId))
-                .flatMap(postSingle ->
-                        postSingle.flatMap(
-                                post -> Single.zip(
-                                        findUserSingleById(post.getUserId()),
-                                        findAllTopicSingleByPostId(postId),
-                                        (user, listTopic) -> {
-                                            if (Objects.nonNull(postRequest.getTitle()) && !"".equalsIgnoreCase(postRequest.getTitle())) {
-                                                post.setTitle(postRequest.getTitle());
-                                            }
-                                            if (Objects.nonNull(postRequest.getContent()) && !"".equalsIgnoreCase(postRequest.getContent())) {
-                                                post.setContent(postRequest.getContent());
-                                            }
-                                            post.setUpdateAt(getCurrentDateTime());
-                                            postRepository.update(post, postId);
-                                            return postMapper.toPostResponse(post, user, listTopic);
-                                        }
-                                )
-                        ));
+        return Single.just("io")
+                .flatMap(s -> findPostSingleById(postId))
+                .flatMap(post -> Single.zip(
+                        findUserSingleById(post.getUserId()),
+                        findAllTopicSingleByPostId(postId),
+                        (user, listTopic) -> {
+                            if (Objects.nonNull(postRequest.getTitle()) && !"".equalsIgnoreCase(postRequest.getTitle())) {
+                                post.setTitle(postRequest.getTitle());
+                            }
+                            if (Objects.nonNull(postRequest.getContent()) && !"".equalsIgnoreCase(postRequest.getContent())) {
+                                post.setContent(postRequest.getContent());
+                            }
+                            post.setUpdateAt(getCurrentDateTime());
+                            postRepository.update(post, postId);
+                            return postMapper.toPostResponse(post, user, listTopic);
+                        }
+                ));
     }
 
 

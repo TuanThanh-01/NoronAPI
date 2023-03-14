@@ -3,6 +3,7 @@ package com.mhsolution.noronapi.controller;
 import com.mhsolution.noronapi.data.request.CommentRequest;
 import com.mhsolution.noronapi.data.response.CommentResponse;
 import com.mhsolution.noronapi.service.comment.CommentService;
+import io.reactivex.rxjava3.core.Single;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -20,22 +21,22 @@ public class CommentController {
     }
 
     @GetMapping("/comment/get-all-by-post/{postId}")
-    public ResponseEntity<List<CommentResponse>> getAllCommentInPost(@PathVariable("postId") int postId) {
+    public ResponseEntity<Single<List<CommentResponse>>> getAllCommentInPost(@PathVariable("postId") int postId) {
         return ResponseEntity.status(HttpStatus.OK).body(commentService.fetchAllCommentByPostId(postId));
     }
 
     @GetMapping("/comment/get-all-answer-comment/{cmtId}")
-    public ResponseEntity<List<CommentResponse>> getAllAnswerComment(@PathVariable("cmtId") int cmtId) {
+    public ResponseEntity<Single<List<CommentResponse>>> getAllAnswerComment(@PathVariable("cmtId") int cmtId) {
         return ResponseEntity.status(HttpStatus.OK).body(commentService.fetchAllAnswerComment(cmtId));
     }
 
     @PostMapping("/comment/create")
-    public ResponseEntity<CommentResponse> createComment(@RequestBody CommentRequest commentRequest) {
+    public ResponseEntity<Single<CommentResponse>> createComment(@RequestBody CommentRequest commentRequest) {
         return ResponseEntity.status(HttpStatus.CREATED).body(commentService.createComment(commentRequest));
     }
 
     @PutMapping("/comment/update/{id}")
-    public ResponseEntity<CommentResponse> updateComment(@RequestBody CommentRequest commentRequest, @PathVariable("id") int id) {
+    public ResponseEntity<Single<CommentResponse>> updateComment(@RequestBody CommentRequest commentRequest, @PathVariable("id") int id) {
         return ResponseEntity.status(HttpStatus.OK).body(commentService.updateComment(id, commentRequest));
     }
 
