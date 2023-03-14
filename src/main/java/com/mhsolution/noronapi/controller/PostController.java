@@ -26,29 +26,21 @@ public class PostController {
     @GetMapping("/post/all")
     public ResponseEntity<Single<ListPostResponse>> findAllPost(@RequestParam int limit, @RequestParam int pageNum) {
         return ResponseEntity.status(HttpStatus.OK).body(postService.findAll(pageNum, limit));
-//        postService.findAll(pageNum, limit);
-//        return null;
     }
 
     @GetMapping("/post/find-single-post/{id}")
-    public ResponseEntity<PostResponse> findById(@PathVariable("id") int postId) {
-//        return ResponseEntity.status(HttpStatus.OK).body(postService.findPostById(postId));
-        postService.findPostById(postId);
-        return null;
+    public ResponseEntity<Single<PostResponse>> findById(@PathVariable("id") int postId) {
+        return ResponseEntity.status(HttpStatus.OK).body(postService.findPostById(postId));
     }
 
     @PostMapping("/post/create")
-    public ResponseEntity<PostResponse> createPost(@RequestBody PostRequest postRequest) {
-//        return ResponseEntity.status(HttpStatus.CREATED).body(postService.createPost(postRequest));
-        postService.createPost(postRequest);
-        return null;
+    public ResponseEntity<Single<PostResponse>> createPost(@RequestBody PostRequest postRequest) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(postService.createPost(postRequest));
     }
 
     @PutMapping("/post/update/{id}")
-    public ResponseEntity<PostResponse> updatePost(@RequestBody PostRequest postRequest, @PathVariable("id") int postId) {
-//        return ResponseEntity.status(HttpStatus.OK).body(postService.updatePost(postId, postRequest));
-        postService.updatePost(postId, postRequest);
-        return null;
+    public ResponseEntity<Single<PostResponse>> updatePost(@RequestBody PostRequest postRequest, @PathVariable("id") int postId) {
+        return ResponseEntity.status(HttpStatus.OK).body(postService.updatePost(postId, postRequest));
     }
 
     @DeleteMapping("/post/delete/{id}")

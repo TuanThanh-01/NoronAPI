@@ -1,8 +1,6 @@
 package com.mhsolution.noronapi.service.post;
 
 import com.mhsolution.noronapi.data.mapper.PostMapper;
-import com.mhsolution.noronapi.data.mapper.TopicMapper;
-import com.mhsolution.noronapi.data.mapper.UserMapper;
 import com.mhsolution.noronapi.data.request.PostRequest;
 import com.mhsolution.noronapi.data.response.PostResponse;
 import com.mhsolution.noronapi.entity.ListPostResponse;
@@ -12,7 +10,6 @@ import com.mhsolution.noronapi.repository.users.UserRepository;
 import com.tej.JooQDemo.jooq.sample.model.tables.pojos.Post;
 import com.tej.JooQDemo.jooq.sample.model.tables.pojos.Topic;
 import com.tej.JooQDemo.jooq.sample.model.tables.pojos.Users;
-import io.reactivex.rxjava3.core.Observable;
 import io.reactivex.rxjava3.core.Single;
 import io.reactivex.rxjava3.schedulers.Schedulers;
 import org.springframework.stereotype.Service;
@@ -49,40 +46,30 @@ public class PostServiceImpl implements PostService {
 
     @Override
     public Single<ListPostResponse> findAll(int pageNum, int limit) {
-        List<Post> postList = postRepository.findAll(pageNum, limit);
+        return Single.just(getAllPost(pageNum, limit))
+                .flatMap(listPostSingle -> listPostSingle
+                        .flatMap(listPost -> Single.zip(
+                                getUsersMap(listPost),
+                                getPostTopicMap(listPost),
+                                (usersMap, postMap) -> {
+                                    List<PostResponse> responses = postMapper.toPostResponse(listPost, postMap, usersMap);
+                                    return new ListPostResponse()
+                                            .setPageNum(pageNum)
+                                            .setLimit(limit)
+                                            .setPosts(responses);
+                                }))
+                );
+    }
 
-//        Single singlePostList = Single.create(singleSubscriber -> {
-//            singleSubscriber.onSuccess(postList);
-//        });
-        Single singleMapUser = getUsersMap(postList);
-        Single singlePostTopicMap = getPostTopicMap(postList);
-
-        return Single.zip(singleMapUser, singlePostTopicMap, (o1, o2) -> {
-            List<PostResponse> responses = postMapper.toPostResponse(postList, (Map<Integer, List<Topic>>) o2, (Map<Integer, Users>) o1);
-            return Single.just(new ListPostResponse()
-                    .setPageNum(pageNum)
-                    .setLimit(limit)
-                    .setPosts(responses));
+    private Single<List<Post>> getAllPost(int pageNum, int limit) {
+        return Single.create(singleSubscriber -> {
+            List<Post> postList = postRepository.findAll(pageNum, limit);
+            if (postList.size() == 0) {
+                singleSubscriber.onError(new Exception("Can't find user"));
+            } else {
+                singleSubscriber.onSuccess(postList);
+            }
         });
-
-//        Single single1 = Single.just(postList)
-//                .flatMap(list ->
-//                    getUsersMap(list)
-//                            .map(integerUsersMap -> {
-//
-//                            })
-//                );
-
-
-//          List<PostResponse> response = postMapper.toPostResponse(postList, postTopicMap, userMap);
-//        Map<Integer, Users> userMap = getUsersMap(postList);
-//        HashMap<Integer, List<Topic>> postTopicMap = getPostTopicMap(postList);
-//        return Single.just(new ListPostResponse()
-//                .setPageNum(pageNum)
-//                .setLimit(limit)
-//                .setPosts(response));
-//        Single<Map<Integer, Users>> userMap = getUsersMap(postList);
-//        return null;
     }
 
     private Single<Map<Integer, Users>> getUsersMap(List<Post> postList) {
@@ -90,14 +77,14 @@ public class PostServiceImpl implements PostService {
                 .map(Post::getUserId)
                 .collect(Collectors.toList());
         return Single.create(singleSubscriber -> {
-                    List<Users> users = userRepository.findAllByListId(listUserId);
-                    if (users.size() == 0) {
-                        singleSubscriber.onError(new Exception("Can't find user"));
-                    } else {
-                        singleSubscriber.onSuccess(users.stream().collect(toMap(Users::getId, Function.identity())));
-                    }
-                }
-        );
+            List<Users> users = userRepository.findAllByListId(listUserId);
+            if (users.size() == 0) {
+                singleSubscriber.onError(new Exception("Can't find user"));
+            } else {
+                singleSubscriber.onSuccess(users.stream()
+                        .collect(toMap(Users::getId, Function.identity())));
+            }
+        });
     }
 
     private Single<HashMap<Integer, List<Topic>>> getPostTopicMap(List<Post> postList) {
@@ -114,42 +101,98 @@ public class PostServiceImpl implements PostService {
         });
     }
 
+    private Single<Post> findPostSingleById(int postId) {
+        return Single.create(singleSubscriber -> {
+            Post post = postRepository.findById(postId);
+            if (post == null) {
+                singleSubscriber.onError(new Exception("Post can't find"));
+            } else {
+                singleSubscriber.onSuccess(post);
+            }
+        });
+    }
+
+    private Single<Users> findUserSingleById(int userId) {
+        return Single.create(singleSubscriber -> {
+            Users users = userRepository.findByID(userId);
+            if (users == null) {
+                singleSubscriber.onError(new Exception("Users can't find"));
+            } else {
+                singleSubscriber.onSuccess(users);
+            }
+        });
+    }
+
+    private Single<List<Topic>> findAllTopicSingleByPostId(int postId) {
+        return Single.create(singleSubscriber -> {
+            List<Topic> topicList = topicRepository.findByPostId(postId);
+            if (topicList.size() == 0) {
+                singleSubscriber.onError(new Exception("Topics can't find"));
+            } else {
+                singleSubscriber.onSuccess(topicList);
+            }
+        });
+    }
+
     @Override
     public Single<PostResponse> findPostById(int postId) {
-        Post post = postRepository.findById(postId);
-        Users user = userRepository.findByID(post.getUserId());
-        List<Topic> topicList = topicRepository.findByPostId(postId);
-//        return postMapper.toPostResponse(post, user, topicList);
-        return null;
+        return Single.just(findPostSingleById(postId))
+                .flatMap(postSingle -> postSingle.flatMap(
+                        post -> Single.zip(
+                                findUserSingleById(post.getUserId()),
+                                findAllTopicSingleByPostId(postId),
+                                (user, topicList) -> postMapper.toPostResponse(post, user, topicList)
+                        )
+                ));
+    }
+
+    private Single<List<Topic>> findAllTopicSingleById(List<Integer> topicListId) {
+        return Single.create(singleSubscriber -> {
+            List<Topic> topicList = topicRepository.findAllById(topicListId);
+            if (topicList.size() == 0) {
+                singleSubscriber.onError(new Exception("Can't find list topic"));
+            } else {
+                singleSubscriber.onSuccess(topicList);
+            }
+        });
     }
 
 
     @Override
     public Single<PostResponse> createPost(PostRequest postRequest) {
-        Post post = postMapper.toPojo(postRequest);
-        Users users = userRepository.findByID(postRequest.getUserId());
-        List<Topic> topicList = topicRepository.findAllById(postRequest.getTopicId());
-        postRepository.add(post, postRequest.getTopicId());
-//        return postMapper.toPostResponse(post, users, topicList);
-        return null;
+        return Single.just(postMapper.toPojo(postRequest))
+                .flatMap(post -> Single.zip(
+                        findUserSingleById(post.getUserId()),
+                        findAllTopicSingleById(postRequest.getTopicId()),
+                        (user, listPostId) -> {
+                            postRepository.add(post, postRequest.getTopicId());
+                            return postMapper.toPostResponse(post, user, listPostId);
+                        }
+                ));
     }
 
 
     @Override
     public Single<PostResponse> updatePost(int postId, PostRequest postRequest) {
-        Post postDB = postRepository.findById(postId);
-        if (Objects.nonNull(postRequest.getTitle()) && !"".equalsIgnoreCase(postRequest.getTitle())) {
-            postDB.setTitle(postRequest.getTitle());
-        }
-        if (Objects.nonNull(postRequest.getContent()) && !"".equalsIgnoreCase(postRequest.getContent())) {
-            postDB.setContent(postRequest.getContent());
-        }
-        postDB.setUpdateAt(getCurrentDateTime());
-        postRepository.update(postDB, postId);
-        Users users = userRepository.findByID(postDB.getUserId());
-        List<Topic> topicList = topicRepository.findByPostId(postDB.getId());
-//        return postMapper.toPostResponse(postDB, users, topicList);
-        return null;
+        return Single.just(findPostSingleById(postId))
+                .flatMap(postSingle ->
+                        postSingle.flatMap(
+                                post -> Single.zip(
+                                        findUserSingleById(post.getUserId()),
+                                        findAllTopicSingleByPostId(postId),
+                                        (user, listTopic) -> {
+                                            if (Objects.nonNull(postRequest.getTitle()) && !"".equalsIgnoreCase(postRequest.getTitle())) {
+                                                post.setTitle(postRequest.getTitle());
+                                            }
+                                            if (Objects.nonNull(postRequest.getContent()) && !"".equalsIgnoreCase(postRequest.getContent())) {
+                                                post.setContent(postRequest.getContent());
+                                            }
+                                            post.setUpdateAt(getCurrentDateTime());
+                                            postRepository.update(post, postId);
+                                            return postMapper.toPostResponse(post, user, listTopic);
+                                        }
+                                )
+                        ));
     }
 
 
